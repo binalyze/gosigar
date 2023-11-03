@@ -1,5 +1,6 @@
 // Copyright (c) 2012 VMware, Inc.
 
+//go:build darwin || freebsd || netbsd || openbsd || linux
 // +build darwin freebsd netbsd openbsd linux
 
 package psnotify
@@ -7,6 +8,7 @@ package psnotify
 import (
 	"errors"
 	"fmt"
+	"sync"
 )
 
 type ProcEventFork struct {
@@ -38,6 +40,7 @@ type Watcher struct {
 	Exec     chan *ProcEventExec // Exec events are sent on this channel
 	Exit     chan *ProcEventExit // Exit events are sent on this channel
 	done     chan bool           // Used to stop the readEvents() goroutine
+	watchMu  sync.Mutex          // Mutex to protect access to the Watch and RemoveWatch calls
 	isClosed bool                // Set to true when Close() is first called
 }
 
@@ -94,6 +97,9 @@ func (w *Watcher) Close() error {
 // The flags param is a bitmask of process events to capture,
 // must be one or more of: PROC_EVENT_FORK, PROC_EVENT_EXEC, PROC_EVENT_EXIT
 func (w *Watcher) Watch(pid int, flags uint32) error {
+	w.watchMu.Lock()
+	defer w.watchMu.Unlock()
+
 	if w.isClosed {
 		return errors.New("psnotify watcher is closed")
 	}
@@ -114,6 +120,9 @@ func (w *Watcher) Watch(pid int, flags uint32) error {
 
 // Remove pid from the watched process set.
 func (w *Watcher) RemoveWatch(pid int) error {
+	w.watchMu.Lock()
+	defer w.watchMu.Unlock()
+
 	_, ok := w.watches[pid]
 	if !ok {
 		msg := fmt.Sprintf("watch for pid=%d does not exist", pid)
