@@ -77,13 +77,16 @@ func (w *Watcher) finish() {
 // Closes the OS specific event listener,
 // removes all watches and closes all event channels.
 func (w *Watcher) Close() error {
+	w.watchMu.Lock()
+	defer w.watchMu.Unlock()
+
 	if w.isClosed {
 		return nil
 	}
 	w.isClosed = true
 
 	for pid := range w.watches {
-		w.RemoveWatch(pid)
+		w.removeWatch(pid)
 	}
 
 	w.done <- true
@@ -123,10 +126,13 @@ func (w *Watcher) RemoveWatch(pid int) error {
 	w.watchMu.Lock()
 	defer w.watchMu.Unlock()
 
+	return w.removeWatch(pid)
+}
+
+func (w *Watcher) removeWatch(pid int) error {
 	_, ok := w.watches[pid]
 	if !ok {
-		msg := fmt.Sprintf("watch for pid=%d does not exist", pid)
-		return errors.New(msg)
+		return fmt.Errorf("watch for pid=%d does not exist", pid)
 	}
 	delete(w.watches, pid)
 	return w.unregister(pid)
