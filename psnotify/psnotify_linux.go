@@ -142,6 +142,9 @@ func (w *Watcher) readEvents() {
 
 // Internal helper to check if pid && event is being watched
 func (w *Watcher) isWatching(pid int, event uint32) bool {
+	w.watchMu.Lock()
+	defer w.watchMu.Unlock()
+
 	if watch, ok := w.watches[pid]; ok {
 		return (watch.flags & event) == event
 	}
